@@ -3,6 +3,8 @@
 A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you switch 3D terrain between the built-in
 AWS Terrarium tiles and [Mapterhorn](https://mapterhorn.com/) terrain tiles, and back again.
 
+GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
+
 By default GeoLibre uses Terrarium tiles from
 `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`. This plugin replaces the terrain
 DEM source with Mapterhorn's Terrarium-encoded WebP tiles (or a custom tile source) and restores the default when
