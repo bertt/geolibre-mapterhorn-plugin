@@ -8,6 +8,8 @@ By default GeoLibre uses Terrarium tiles from
 DEM source with Mapterhorn's Terrarium-encoded WebP tiles (or a custom tile source) and restores the default when
 you switch back or disable the plugin.
 
+<img width="318" height="426" alt="image" src="https://github.com/user-attachments/assets/3c147140-e9a4-434a-9bcf-1f3215a16fbe" />
+
 ## Features
 
 - Switch between **Mapterhorn**, **AWS Terrarium (GeoLibre default)** and a **Custom** DEM source.
