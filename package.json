@@ -1,0 +1,16 @@
+{
+  "name": "geolibre-mapterhorn-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GeoLibre plugin that switches terrain between AWS Terrarium and Mapterhorn.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package:geolibre": "node scripts/build.mjs --zip"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.16",
+    "esbuild": "^0.25.0"
+  }
+}
