@@ -64,6 +64,27 @@ npm run build            # dist/geolibre-mapterhorn/{plugin.json,index.js,style.
 npm run package:geolibre # also creates dist/geolibre-mapterhorn-<version>.zip and prints its SHA-256
 ```
 
+## Creating a release
+
+1. Bump the version in `geolibre-plugin/plugin.json` (the build and zip name use this) and in `package.json`.
+2. Build and package:
+   ```bash
+   npm run package:geolibre
+   ```
+   This creates `dist/geolibre-mapterhorn-<version>.zip` and `.zip.sha256`, and prints the SHA-256.
+3. Commit, tag and push:
+   ```bash
+   git commit -am "Release v<version>"
+   git tag v<version>
+   git push && git push --tags
+   ```
+4. Create the GitHub release and attach the zip and checksum:
+   ```bash
+   gh release create v<version> dist/geolibre-mapterhorn-<version>.zip dist/geolibre-mapterhorn-<version>.zip.sha256 --generate-notes
+   ```
+5. To publish in the plugin registry, update the entry (download URL and SHA-256) in
+   [geolibre-plugins](https://github.com/opengeos/geolibre-plugins).
+
 ## Credits
 
 Terrain data: [Mapterhorn](https://mapterhorn.com/). Default GeoLibre terrain:
