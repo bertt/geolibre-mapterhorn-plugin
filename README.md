@@ -5,6 +5,8 @@ AWS Terrarium tiles and [Mapterhorn](https://mapterhorn.com/) terrain tiles, and
 
 GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 
+<img width="953" height="484" alt="image" src="https://github.com/user-attachments/assets/a437ee16-a7ff-4697-b6cc-aed93af4fc7e" />
+
 By default GeoLibre uses Terrarium tiles from
 `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`. This plugin replaces the terrain
 DEM source with Mapterhorn's Terrarium-encoded WebP tiles (or a custom tile source) and restores the default when
