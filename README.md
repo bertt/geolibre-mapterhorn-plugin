@@ -14,6 +14,13 @@ you switch back or disable the plugin.
 
 <img width="1918" height="1032" alt="image" src="https://github.com/user-attachments/assets/5733b12a-500a-4159-85d2-37f6141a82d1" />
 
+## How it works in GeoLibre
+
+Using the plugin is a two-stage rocket:
+
+1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**. This shows the terrain with the default AWS Terrarium tiles.
+2. **Then switch the source in the plugin** from AWS Terrarium to Mapterhorn (via the **Terrain** toolbar menu: **Use Mapterhorn**).
+
 ## Features
 
 - Switch between **Mapterhorn**, **AWS Terrarium (GeoLibre default)** and a **Custom** DEM source.
@@ -54,13 +61,6 @@ Requires GeoLibre 0.9.0 or newer.
   **Manage Plugins → Settings → Install from file**.
 - **For development:** build the plugin (below) and add the `dist/geolibre-mapterhorn` folder under
   **Settings → Plugins** as a development directory.
-
-## How it works in GeoLibre
-
-Using the plugin is a two-stage rocket:
-
-1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**. This shows the terrain with the default AWS Terrarium tiles.
-2. **Then switch the source in the plugin** from AWS Terrarium to Mapterhorn (via the **Terrain** toolbar menu: **Use Mapterhorn**).
 
 ## Usage
 
