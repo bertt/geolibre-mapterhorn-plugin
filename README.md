@@ -55,10 +55,17 @@ Requires GeoLibre 0.9.0 or newer.
 - **For development:** build the plugin (below) and add the `dist/geolibre-mapterhorn` folder under
   **Settings → Plugins** as a development directory.
 
+## How it works in GeoLibre
+
+Using the plugin is a two-stage rocket:
+
+1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**. This shows the terrain with the default AWS Terrarium tiles.
+2. **Then switch the source in the plugin** from AWS Terrarium to Mapterhorn (via the **Terrain** toolbar menu: **Use Mapterhorn**).
+
 ## Usage
 
 Use the **Terrain** toolbar menu: **Use Mapterhorn**, **Use AWS Terrarium (default)**, or
-**Terrain provider…** to open the settings panel. Enable 3D terrain in GeoLibre (Controls → Terrain) to see the result.
+**Terrain provider…** to open the settings panel. Enable 3D terrain in GeoLibre (Controls → Terrain) first to see the result.
 
 ## Build
 
