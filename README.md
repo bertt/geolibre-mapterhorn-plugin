@@ -21,6 +21,7 @@ Using the plugin is a two-stage rocket:
 1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**. This shows the terrain with the default AWS Terrarium tiles.
 2. **Then switch the source in the plugin** from AWS Terrarium to Mapterhorn (via the **Terrain** toolbar menu: **Use Mapterhorn**).
 
+Terrain exaggeration can be adjusted by double-clicking the GeoLibre terrain button.
 ## Features
 
 - Switch between **Mapterhorn**, **AWS Terrarium (GeoLibre default)** and a **Custom** DEM source.
