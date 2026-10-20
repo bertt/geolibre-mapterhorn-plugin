@@ -41,13 +41,24 @@ Terrain exaggeration can be adjusted by double-clicking the GeoLibre terrain but
 
 All values except the provider are editable when **Custom** is selected.
 
+### Cesium settings
+
+On the Cesium renderer the plugin uses a separate, always-editable terrain source:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| Cesium terrain URL | `https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png` | Terrarium tile URL template with `{z}`, `{x}`, `{y}`. |
+| Cesium max zoom | `15` | Highest zoom level served; deeper levels are upsampled. |
+
+Note: the Re:Earth terrain tiles contain **ellipsoidal heights** (height above the WGS84 ellipsoid), which is what Cesium expects, not heights above the geoid/sea level.
+
 ## Renderer support
 
 | Renderer | Status |
 | --- | --- |
 | MapLibre | Supported |
 | Mapbox | Supported |
-| Cesium | Not yet (may be added later using [cesium-mapterhorn-provider](https://github.com/bertt/cesium-mapterhorn-provider)) |
+| Cesium | Supported (Terrarium heightmap provider, URL configurable, see above) |
 | ArcGIS | Not supported |
 
 On unsupported renderers GeoLibre suspends the plugin.

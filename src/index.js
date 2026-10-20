@@ -4,6 +4,8 @@ const PANEL_ID = `${PLUGIN_ID}-panel`;
 const MENU_ID = `${PLUGIN_ID}-menu`;
 
 const MAPTERHORN_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
+const CESIUM_URL = "https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png";
+const CESIUM_MAX_ZOOM = 15;
 const AWS_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 
 const PRESETS = {
@@ -33,7 +35,7 @@ const PRESETS = {
   },
 };
 
-let settings = { preset: "mapterhorn", ...PRESETS.mapterhorn };
+let settings = { preset: "mapterhorn", ...PRESETS.mapterhorn, cesiumUrl: CESIUM_URL, cesiumMaxZoom: CESIUM_MAX_ZOOM };
 let appApi = null;
 let disposers = [];
 let mapListener = null;
@@ -51,7 +53,15 @@ function setStatus(message) {
 function sanitize(input) {
   const preset = PRESETS[input?.preset] ? input.preset : "mapterhorn";
   const base = PRESETS[preset];
-  if (preset !== "custom") return { preset, ...base };
+  const cesiumMaxZoom = Number(input?.cesiumMaxZoom);
+  const cesium = {
+    cesiumUrl:
+      typeof input?.cesiumUrl === "string" && input.cesiumUrl.trim()
+        ? input.cesiumUrl.trim()
+        : CESIUM_URL,
+    cesiumMaxZoom: cesiumMaxZoom > 0 ? cesiumMaxZoom : CESIUM_MAX_ZOOM,
+  };
+  if (preset !== "custom") return { preset, ...base, ...cesium };
   const tileSize = Number(input.tileSize);
   const maxZoom = Number(input.maxZoom);
   return {
@@ -62,6 +72,7 @@ function sanitize(input) {
     tileSize: tileSize > 0 ? tileSize : base.tileSize,
     maxZoom: maxZoom > 0 ? maxZoom : base.maxZoom,
     label: base.label,
+    ...cesium,
   };
 }
 
@@ -101,6 +112,138 @@ function restoreMapLibre(map) {
   }
 }
 
+// --- Cesium ---------------------------------------------------------------
+
+const CESIUM_GRID = 65;
+let cesiumState = null; // { viewer, original, provider, listener, remove }
+
+function decodeHeight(encoding, r, g, b) {
+  return encoding === "mapbox"
+    ? -10000 + (r * 65536 + g * 256 + b) * 0.1
+    : r * 256 + g + b / 256 - 32768;
+}
+
+function createCesiumProvider(Cesium, config) {
+  const tilingScheme = new Cesium.WebMercatorTilingScheme();
+  const levelZeroError = Cesium.TerrainProvider.getEstimatedLevelZeroGeometricErrorForAHeightmap(
+    tilingScheme.ellipsoid,
+    CESIUM_GRID,
+    tilingScheme.getNumberOfXTilesAtLevel(0),
+  );
+  const errorEvent = new Cesium.Event();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  const flat = () =>
+    new Cesium.HeightmapTerrainData({
+      buffer: new Float32Array(CESIUM_GRID * CESIUM_GRID),
+      width: CESIUM_GRID,
+      height: CESIUM_GRID,
+    });
+
+  return {
+    errorEvent,
+    credit: new Cesium.Credit(config.credit || "Terrain"),
+    tilingScheme,
+    ready: true,
+    readyPromise: Promise.resolve(true),
+    hasWaterMask: false,
+    hasVertexNormals: false,
+    availability: undefined,
+    getLevelMaximumGeometricError: (level) => levelZeroError / (1 << level),
+    getTileDataAvailable: (x, y, level) => level <= config.maxZoom,
+    loadTileDataAvailability: () => undefined,
+    async requestTileGeometry(x, y, level) {
+      if (level > config.maxZoom) return undefined;
+      const url = config.url
+        .replace("{z}", level)
+        .replace("{x}", x)
+        .replace("{y}", y);
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return flat();
+        const bitmap = await createImageBitmap(await response.blob(), {
+          colorSpaceConversion: "none",
+          premultiplyAlpha: "none",
+        });
+        const { width, height } = bitmap;
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close?.();
+        const pixels = ctx.getImageData(0, 0, width, height).data;
+        const heights = new Float32Array(CESIUM_GRID * CESIUM_GRID);
+        for (let row = 0; row < CESIUM_GRID; row++) {
+          const py = Math.round((row / (CESIUM_GRID - 1)) * (height - 1));
+          for (let col = 0; col < CESIUM_GRID; col++) {
+            const px = Math.round((col / (CESIUM_GRID - 1)) * (width - 1));
+            const i = (py * width + px) * 4;
+            heights[row * CESIUM_GRID + col] = decodeHeight(
+              config.encoding,
+              pixels[i],
+              pixels[i + 1],
+              pixels[i + 2],
+            );
+          }
+        }
+        return new Cesium.HeightmapTerrainData({
+          buffer: heights,
+          width: CESIUM_GRID,
+          height: CESIUM_GRID,
+        });
+      } catch {
+        return flat();
+      }
+    },
+  };
+}
+
+function releaseCesium(restore) {
+  if (!cesiumState) return;
+  const { viewer, original, remove } = cesiumState;
+  cesiumState = null;
+  try {
+    remove?.();
+    if (restore && !viewer.isDestroyed?.() && original) viewer.terrainProvider = original;
+  } catch (error) {
+    console.warn("Mapterhorn plugin: could not restore Cesium terrain.", error);
+  }
+}
+
+function applyCesium(handle) {
+  const { Cesium, viewer, scene } = handle;
+  if (settings.preset === "aws") {
+    releaseCesium(true);
+    return;
+  }
+  const config = {
+    url: settings.cesiumUrl,
+    maxZoom: settings.cesiumMaxZoom,
+    encoding: settings.encoding,
+    credit: settings.credit,
+  };
+  const key = JSON.stringify(config);
+  if (cesiumState?.viewer === viewer && cesiumState.key === key) return;
+  const original = cesiumState?.viewer === viewer ? cesiumState.original : viewer.terrainProvider;
+  releaseCesium(false);
+  const provider = createCesiumProvider(Cesium, config);
+  const isOff = (p) => p instanceof Cesium.EllipsoidTerrainProvider;
+  const install = () => {
+    if (!viewer.isDestroyed?.() && !isOff(viewer.terrainProvider)) {
+      viewer.terrainProvider = provider;
+    }
+  };
+  // GeoLibre swaps the provider whenever terrain is toggled; take it over again.
+  const remove = scene.terrainProviderChanged.addEventListener((current) => {
+    if (current !== provider && !isOff(current)) {
+      cesiumState.original = current;
+      install();
+    }
+  });
+  cesiumState = { viewer, original, provider, key, remove };
+  install();
+}
+
 // --- Dispatch -------------------------------------------------------------
 
 function detachMapListener() {
@@ -114,8 +257,9 @@ function apply() {
   if (!appApi) return;
   const renderer = appApi.getMapRenderer?.() ?? "maplibre";
   try {
+    if (renderer !== "cesium") releaseCesium(true);
     if (renderer === "maplibre" || renderer === "mapbox") {
-      const map = appApi.getMap?.();
+      const map = appApi.getMap?.() ?? appApi.getMapboxMap?.();
       if (!map) {
         retryTimer = setTimeout(apply, 500);
         return;
@@ -132,6 +276,19 @@ function apply() {
         return;
       }
       setStatus(`${renderer === "mapbox" ? "Mapbox" : "MapLibre"}: ${settings.label} terrain.`);
+    } else if (renderer === "cesium") {
+      detachMapListener();
+      const handle = appApi.getCesiumScene?.();
+      if (!handle) {
+        retryTimer = setTimeout(apply, 500);
+        return;
+      }
+      applyCesium(handle);
+      setStatus(
+        settings.preset === "aws"
+          ? "Cesium: GeoLibre default terrain."
+          : `Cesium: terrain from ${settings.cesiumUrl}`,
+      );
     } else {
       setStatus(`The ${renderer} renderer is not supported.`);
     }
@@ -172,6 +329,13 @@ function renderPanel(container) {
   maxZoom.min = "1";
   maxZoom.max = "24";
 
+  const cesiumUrl = document.createElement("input");
+  cesiumUrl.type = "text";
+  const cesiumMaxZoom = document.createElement("input");
+  cesiumMaxZoom.type = "number";
+  cesiumMaxZoom.min = "1";
+  cesiumMaxZoom.max = "24";
+
   const fields = [url, credit, encoding, tileSize, maxZoom];
   const sync = () => {
     preset.value = settings.preset;
@@ -180,6 +344,8 @@ function renderPanel(container) {
     encoding.value = settings.encoding;
     tileSize.value = String(settings.tileSize);
     maxZoom.value = String(settings.maxZoom);
+    cesiumUrl.value = settings.cesiumUrl;
+    cesiumMaxZoom.value = String(settings.cesiumMaxZoom);
     for (const el of fields) el.disabled = settings.preset !== "custom";
   };
   sync();
@@ -201,6 +367,8 @@ function renderPanel(container) {
       encoding: encoding.value,
       tileSize: tileSize.value,
       maxZoom: maxZoom.value,
+      cesiumUrl: cesiumUrl.value,
+      cesiumMaxZoom: cesiumMaxZoom.value,
     });
     sync();
     apply();
@@ -210,7 +378,7 @@ function renderPanel(container) {
   resetButton.type = "button";
   resetButton.textContent = "Back to default (AWS)";
   resetButton.addEventListener("click", () => {
-    settings = sanitize({ preset: "aws" });
+    settings = sanitize({ ...settings, preset: "aws" });
     sync();
     apply();
   });
@@ -229,6 +397,8 @@ function renderPanel(container) {
     field("Encoding", encoding),
     field("Tile size (px)", tileSize),
     field("Max zoom", maxZoom),
+    field("Cesium terrain URL ({z}/{x}/{y})", cesiumUrl),
+    field("Cesium max zoom", cesiumMaxZoom),
     actions,
     statusEl,
   );
@@ -266,7 +436,7 @@ function registerUi(app) {
           id: "mapterhorn",
           label: "Use Mapterhorn",
           onSelect: () => {
-            settings = sanitize({ preset: "mapterhorn" });
+            settings = sanitize({ ...settings, preset: "mapterhorn" });
             apply();
           },
         },
@@ -274,7 +444,7 @@ function registerUi(app) {
           id: "aws",
           label: "Use AWS Terrarium (default)",
           onSelect: () => {
-            settings = sanitize({ preset: "aws" });
+            settings = sanitize({ ...settings, preset: "aws" });
             apply();
           },
         },
@@ -287,7 +457,7 @@ export const plugin = {
   id: PLUGIN_ID,
   name: "Mapterhorn Terrain",
   version: __PLUGIN_VERSION__,
-  engines: ["maplibre", "mapbox"],
+  engines: ["maplibre", "mapbox", "cesium"],
   activate(app) {
     appApi = app;
     registerUi(app);
@@ -304,6 +474,7 @@ export const plugin = {
     }
     const map = mapRef;
     detachMapListener();
+    releaseCesium(true);
     try {
       if (map) restoreMapLibre(map);
     } catch (error) {
