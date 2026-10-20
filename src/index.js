@@ -114,7 +114,7 @@ function apply() {
   if (!appApi) return;
   const renderer = appApi.getMapRenderer?.() ?? "maplibre";
   try {
-    if (renderer === "maplibre") {
+    if (renderer === "maplibre" || renderer === "mapbox") {
       const map = appApi.getMap?.();
       if (!map) {
         retryTimer = setTimeout(apply, 500);
@@ -131,7 +131,7 @@ function apply() {
         retryTimer = setTimeout(apply, 500);
         return;
       }
-      setStatus(`MapLibre: ${settings.label} terrain.`);
+      setStatus(`${renderer === "mapbox" ? "Mapbox" : "MapLibre"}: ${settings.label} terrain.`);
     } else {
       setStatus(`The ${renderer} renderer is not supported.`);
     }
@@ -287,6 +287,7 @@ export const plugin = {
   id: PLUGIN_ID,
   name: "Mapterhorn Terrain",
   version: __PLUGIN_VERSION__,
+  engines: ["maplibre", "mapbox"],
   activate(app) {
     appApi = app;
     registerUi(app);

@@ -46,8 +46,9 @@ All values except the provider are editable when **Custom** is selected.
 | Renderer | Status |
 | --- | --- |
 | MapLibre | Supported |
+| Mapbox | Supported |
 | Cesium | Not yet (may be added later using [cesium-mapterhorn-provider](https://github.com/bertt/cesium-mapterhorn-provider)) |
-| Mapbox, ArcGIS | Not supported |
+| ArcGIS | Not supported |
 
 On unsupported renderers GeoLibre suspends the plugin.
 
