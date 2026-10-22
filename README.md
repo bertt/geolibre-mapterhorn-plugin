@@ -9,7 +9,7 @@ GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 
 ## How it works in GeoLibre
 
-1. **First choose the rendering engine** in GeoLibre. The plugin only supports MapLibre, Mapbox and Cesium, and the functionality differs per engine: for example, 3D Tiles work better in Cesium.
+1. **First choose the rendering engine** in GeoLibre (**View → Rendering engine**). The plugin only supports MapLibre, Mapbox and Cesium, and the functionality differs per engine: for example, 3D Tiles work better in Cesium.
 2. **Then enable 3D terrain** in GeoLibre: check **Controls → Terrain**.
 3. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use AWS Terrarium (GeoLibre default)**, **Use Mapterhorn**, **Use Re:Earth Ellipsoid**) or the **Terrain provider…** panel.
 
