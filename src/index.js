@@ -89,8 +89,8 @@ function restoreMapLibre(map) {
 }
 // --- Shared tile decoding -------------------------------------------------
 
-const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d", { willReadFrequently: true });
+let canvas = null;
+let ctx = null;
 
 async function readTile({ url: template, minZoom = 0 }, z, x, y, signal) {
   if (z < minZoom) throw new Error("below min zoom");
@@ -102,6 +102,10 @@ async function readTile({ url: template, minZoom = 0 }, z, x, y, signal) {
     premultiplyAlpha: "none",
   });
   const { width, height } = bitmap;
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    ctx = canvas.getContext("2d", { willReadFrequently: true });
+  }
   canvas.width = width;
   canvas.height = height;
   ctx.drawImage(bitmap, 0, 0);
