@@ -92,7 +92,8 @@ npm run package:geolibre # also creates dist/geolibre-mapterhorn-<version>.zip a
 
 ## Credits
 
-Terrain data: [Mapterhorn](https://mapterhorn.com/). Default GeoLibre terrain:
+Terrain data: [Mapterhorn](https://mapterhorn.com/) and
+[Re:Earth Terrain](https://terrain.reearth.land/) (Mapterhorn blended with EGM2008 geoid undulations from NGA). Default GeoLibre terrain:
 [AWS Open Data Terrain Tiles](https://registry.opendata.aws/terrain-tiles/).
 
 ## License
