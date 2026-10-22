@@ -1,6 +1,6 @@
 {
   "name": "geolibre-mapterhorn-plugin",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "GeoLibre plugin that switches terrain between Re:Earth, AWS Terrarium and Mapterhorn.",
   "type": "module",

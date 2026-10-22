@@ -1,7 +1,7 @@
 # GeoLibre Mapterhorn Terrain Plugin
 
-A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you choose the 3D terrain source: **Re:Earth**,
-**AWS Terrarium** or [Mapterhorn](https://mapterhorn.com/). It works in all renderers (MapLibre, Mapbox and Cesium).
+A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you choose the 3D terrain source: **AWS Terrarium** (GeoLibre default),
+[Mapterhorn](https://mapterhorn.com/) or **Re:Earth Ellipsoid**. It works in all renderers (MapLibre, Mapbox and Cesium).
 
 GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 
@@ -12,7 +12,7 @@ GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 ## How it works in GeoLibre
 
 1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**.
-2. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use Re:Earth**, **Use AWS Terrarium**, **Use Mapterhorn**) or the **Terrain provider…** panel.
+2. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use AWS Terrarium (GeoLibre default)**, **Use Mapterhorn**, **Use Re:Earth Ellipsoid**) or the **Terrain provider…** panel.
 
 Terrain exaggeration can be adjusted by double-clicking the GeoLibre terrain button.
 
@@ -22,11 +22,11 @@ All three use Terrarium encoding. The URL of each provider is editable in the pa
 
 | Provider | Default URL | Tile size | Max zoom |
 | --- | --- | --- | --- |
-| Re:Earth | `https://terrain.reearth.land/terrarium/ellipsoid/{z}/{x}/{y}.png` | 256 | 15 |
-| AWS Terrarium | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | 256 | 15 |
-| Mapterhorn (default) | `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` | 512 | 17 |
+| AWS Terrarium (default, GeoLibre's own terrain) | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | 256 | 15 |
+| Mapterhorn | `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` | 512 | 17 |
+| Re:Earth Ellipsoid | `https://terrain.reearth.land/mapterhorn-egm08/terrarium/ellipsoid/{z}/{x}/{y}.webp` | 512 | 14 |
 
-Note: the Re:Earth default URL serves **ellipsoidal heights** (WGS84, `/terrarium/ellipsoid/`), which is what Cesium expects, so ellipsoidal 3D tilesets (e.g. 3D BAG) sit on the terrain. AWS and Mapterhorn serve heights above sea level (geoid); tilesets in ellipsoidal heights float above them by the geoid undulation (about 45 m in the Netherlands). Re:Earth also offers sea-level tiles at `/terrarium/elevation/`.
+Note: the Re:Earth default URL serves **ellipsoidal heights** (WGS84, `/terrarium/ellipsoid/`; sea-level variant: `/terrarium/elevation/`), which is what Cesium expects, so ellipsoidal 3D tilesets (e.g. 3D BAG) sit on the terrain. AWS and Mapterhorn serve heights above sea level (geoid); tilesets in ellipsoidal heights float above them by the geoid undulation (about 45 m in the Netherlands).
 
 ## Renderer support
 

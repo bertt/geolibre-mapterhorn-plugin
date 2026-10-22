@@ -4,15 +4,8 @@ const PANEL_ID = `${PLUGIN_ID}-panel`;
 const MENU_ID = `${PLUGIN_ID}-menu`;
 
 const PROVIDERS = {
-  rearth: {
-    label: "Re:Earth",
-    url: "https://terrain.reearth.land/terrarium/ellipsoid/{z}/{x}/{y}.png",
-    credit: "Re:Earth terrain",
-    tileSize: 256,
-    maxZoom: 15,
-  },
   aws: {
-    label: "AWS Terrarium",
+    label: "AWS Terrarium (GeoLibre default)",
     url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
     credit: "AWS Open Data Terrain Tiles",
     tileSize: 256,
@@ -25,12 +18,19 @@ const PROVIDERS = {
     tileSize: 512,
     maxZoom: 17,
   },
+  rearth: {
+    label: "Re:Earth Ellipsoid",
+    url: "https://terrain.reearth.land/mapterhorn-egm08/terrarium/ellipsoid/{z}/{x}/{y}.webp",
+    credit: "Re:Earth terrain",
+    tileSize: 512,
+    minZoom: 1, // the ellipsoid tile 0/0/0 returns HTTP 500
+    maxZoom: 14,
+  },
 };
-
 const defaultUrls = () =>
   Object.fromEntries(Object.entries(PROVIDERS).map(([key, p]) => [key, p.url]));
 
-let settings = { provider: "mapterhorn", urls: defaultUrls() };
+let settings = { provider: "aws", urls: defaultUrls() };
 const current = () => ({ ...PROVIDERS[settings.provider], url: settings.urls[settings.provider] });let appApi = null;
 let disposers = [];
 let mapListener = null;
@@ -51,14 +51,14 @@ function sanitize(input) {
     const value = input?.urls?.[key];
     if (typeof value === "string" && value.trim()) urls[key] = value.trim();
   }
-  return { provider: PROVIDERS[input?.provider] ? input.provider : "mapterhorn", urls };
+  return { provider: PROVIDERS[input?.provider] ? input.provider : "aws", urls };
 }
 
 // --- MapLibre -------------------------------------------------------------
 
 function applyMapLibre(map) {
   if (!map.isStyleLoaded?.() && !map.getStyle?.()) return false;
-  const { url, tileSize, maxZoom, credit } = current();
+  const { url, tileSize, minZoom = 0, maxZoom, credit } = current();
   const terrain = map.getTerrain?.();
   const exaggeration = terrain?.exaggeration ?? 1;
   const existing = map.getSource(TERRAIN_SOURCE_ID);
@@ -69,6 +69,7 @@ function applyMapLibre(map) {
     type: "raster-dem",
     tiles: [url],
     tileSize,
+    minzoom: minZoom,
     maxzoom: maxZoom,
     encoding: "terrarium",
     attribution: escapeHtml(credit),
@@ -86,10 +87,46 @@ function restoreMapLibre(map) {
     settings = saved;
   }
 }
+// --- Shared tile decoding -------------------------------------------------
+
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+async function readTile({ url: template, minZoom = 0 }, z, x, y, signal) {
+  if (z < minZoom) throw new Error("below min zoom");
+  const url = template.replace("{z}", z).replace("{x}", x).replace("{y}", y);
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const bitmap = await createImageBitmap(await response.blob(), {
+    colorSpaceConversion: "none",
+    premultiplyAlpha: "none",
+  });
+  const { width, height } = bitmap;
+  canvas.width = width;
+  canvas.height = height;
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+  return { width, height, pixels: ctx.getImageData(0, 0, width, height).data };
+}
+
+// Samples a grid x grid height array from a Terrarium tile.
+function sampleHeights({ width, height, pixels }, grid) {
+  const heights = new Float32Array(grid * grid);
+  for (let row = 0; row < grid; row++) {
+    const py = Math.round((row / (grid - 1)) * (height - 1));
+    for (let col = 0; col < grid; col++) {
+      const px = Math.round((col / (grid - 1)) * (width - 1));
+      const i = (py * width + px) * 4;
+      heights[row * grid + col] = pixels[i] * 256 + pixels[i + 1] + pixels[i + 2] / 256 - 32768;
+    }
+  }
+  return heights;
+}
+
 // --- Cesium ---------------------------------------------------------------
 
 const CESIUM_GRID = 65;
-let cesiumState = null; // { viewer, original, provider, listener, remove }
+let cesiumState = null; // { viewer, original, provider, key, remove }
 
 function createCesiumProvider(Cesium, config) {
   const tilingScheme = new Cesium.WebMercatorTilingScheme();
@@ -98,19 +135,11 @@ function createCesiumProvider(Cesium, config) {
     CESIUM_GRID,
     tilingScheme.getNumberOfXTilesAtLevel(0),
   );
-  const errorEvent = new Cesium.Event();
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-  const flat = () =>
-    new Cesium.HeightmapTerrainData({
-      buffer: new Float32Array(CESIUM_GRID * CESIUM_GRID),
-      width: CESIUM_GRID,
-      height: CESIUM_GRID,
-    });
+  const terrainData = (buffer) =>
+    new Cesium.HeightmapTerrainData({ buffer, width: CESIUM_GRID, height: CESIUM_GRID });
 
   return {
-    errorEvent,
+    errorEvent: new Cesium.Event(),
     credit: new Cesium.Credit(config.credit || "Terrain"),
     tilingScheme,
     ready: true,
@@ -123,44 +152,14 @@ function createCesiumProvider(Cesium, config) {
     loadTileDataAvailability: () => undefined,
     async requestTileGeometry(x, y, level) {
       if (level > config.maxZoom) return undefined;
-      const url = config.url
-        .replace("{z}", level)
-        .replace("{x}", x)
-        .replace("{y}", y);
       try {
-        const response = await fetch(url);
-        if (!response.ok) return flat();
-        const bitmap = await createImageBitmap(await response.blob(), {
-          colorSpaceConversion: "none",
-          premultiplyAlpha: "none",
-        });
-        const { width, height } = bitmap;
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(bitmap, 0, 0);
-        bitmap.close?.();
-        const pixels = ctx.getImageData(0, 0, width, height).data;
-        const heights = new Float32Array(CESIUM_GRID * CESIUM_GRID);
-        for (let row = 0; row < CESIUM_GRID; row++) {
-          const py = Math.round((row / (CESIUM_GRID - 1)) * (height - 1));
-          for (let col = 0; col < CESIUM_GRID; col++) {
-            const px = Math.round((col / (CESIUM_GRID - 1)) * (width - 1));
-            const i = (py * width + px) * 4;
-            heights[row * CESIUM_GRID + col] = pixels[i] * 256 + pixels[i + 1] + pixels[i + 2] / 256 - 32768;
-          }
-        }
-        return new Cesium.HeightmapTerrainData({
-          buffer: heights,
-          width: CESIUM_GRID,
-          height: CESIUM_GRID,
-        });
+        return terrainData(sampleHeights(await readTile(config, level, x, y), CESIUM_GRID));
       } catch {
-        return flat();
+        return terrainData(new Float32Array(CESIUM_GRID * CESIUM_GRID));
       }
     },
   };
 }
-
 function releaseCesium(restore) {
   if (!cesiumState) return;
   const { viewer, original, remove } = cesiumState;
@@ -176,6 +175,11 @@ function releaseCesium(restore) {
 function applyCesium(handle) {
   const { Cesium, viewer, scene } = handle;
   const config = current();
+  // GeoLibre's own terrain is AWS Terrarium: leave it alone.
+  if (settings.provider === "aws" && config.url === PROVIDERS.aws.url) {
+    releaseCesium(true);
+    return;
+  }
   const key = JSON.stringify(config);
   if (cesiumState?.viewer === viewer && cesiumState.key === key) return;
   const original = cesiumState?.viewer === viewer ? cesiumState.original : viewer.terrainProvider;
@@ -206,42 +210,45 @@ function detachMapListener() {
   mapListener = null;
 }
 
+function applyFlat(name) {
+  const map = appApi.getMap?.() ?? appApi.getMapboxMap?.();
+  if (!map) return null;
+  if (mapRef !== map) {
+    detachMapListener();
+    mapRef = map;
+    // A style reload drops our source and GeoLibre re-adds its default.
+    mapListener = () => applyMapLibre(map);
+    map.on("style.load", mapListener);
+  }
+  return applyMapLibre(map) ? `${name}: ${current().label} terrain.` : null;
+}
+
 function apply() {
   clearTimeout(retryTimer);
   if (!appApi) return;
   const renderer = appApi.getMapRenderer?.() ?? "maplibre";
+  const flat = renderer === "maplibre" || renderer === "mapbox";
+  // Each handler returns a status message, or null when the renderer is not ready yet.
+  const handlers = {
+    maplibre: () => applyFlat("MapLibre"),
+    mapbox: () => applyFlat("Mapbox"),
+    cesium: () => {
+      const handle = appApi.getCesiumScene?.();
+      if (!handle) return null;
+      applyCesium(handle);
+      return `Cesium: ${current().label} terrain.`;
+    },
+  };
   try {
     if (renderer !== "cesium") releaseCesium(true);
-    if (renderer === "maplibre" || renderer === "mapbox") {
-      const map = appApi.getMap?.() ?? appApi.getMapboxMap?.();
-      if (!map) {
-        retryTimer = setTimeout(apply, 500);
-        return;
-      }
-      if (mapRef !== map) {
-        detachMapListener();
-        mapRef = map;
-        // A style reload drops our source and GeoLibre re-adds its default.
-        mapListener = () => applyMapLibre(map);
-        map.on("style.load", mapListener);
-      }
-      if (!applyMapLibre(map)) {
-        retryTimer = setTimeout(apply, 500);
-        return;
-      }
-      setStatus(`${renderer === "mapbox" ? "Mapbox" : "MapLibre"}: ${current().label} terrain.`);
-    } else if (renderer === "cesium") {
-      detachMapListener();
-      const handle = appApi.getCesiumScene?.();
-      if (!handle) {
-        retryTimer = setTimeout(apply, 500);
-        return;
-      }
-      applyCesium(handle);
-      setStatus(`Cesium: ${current().label} terrain.`);
-    } else {
+    if (!flat) detachMapListener();
+    if (!handlers[renderer]) {
       setStatus(`The ${renderer} renderer is not supported.`);
+      return;
     }
+    const message = handlers[renderer]();
+    if (message) setStatus(message);
+    if (!message) retryTimer = setTimeout(apply, 500);
   } catch (error) {
     console.error("Mapterhorn plugin: failed to apply terrain.", error);
     setStatus(`Error: ${error?.message ?? error}`);
@@ -302,7 +309,11 @@ function renderPanel(container) {
   statusEl = document.createElement("p");
   statusEl.className = "geolibre-mapterhorn-status";
 
-  wrap.append(...rows, statusEl);
+  const version = document.createElement("p");
+  version.className = "geolibre-mapterhorn-status";
+  version.textContent = `Mapterhorn Terrain plugin v${__PLUGIN_VERSION__}`;
+
+  wrap.append(...rows, statusEl, version);
   container.appendChild(wrap);
   return () => {
     wrap.remove();
