@@ -28,6 +28,16 @@ All three use Terrarium encoding. The URL of each provider is editable in the pa
 
 Note: the Re:Earth default URL serves **ellipsoidal heights** (WGS84, `/terrarium/ellipsoid/`; sea-level variant: `/terrarium/elevation/`), which is what Cesium expects, so ellipsoidal 3D tilesets (e.g. 3D BAG) sit on the terrain. AWS and Mapterhorn serve heights above sea level (geoid); tilesets in ellipsoidal heights float above them by the geoid undulation (about 45 m in the Netherlands).
 
+## Demo: building on the Dam (Amsterdam)
+
+Add this 3D Tiles layer in GeoLibre with the **Cesium** renderer:
+
+`https://bertt.github.io/cesium_3dtiles_samples/samples/b3dm/tileset45.json`
+
+Select **Re:Earth Ellipsoid** in the plugin: the tileset uses ellipsoidal heights (the Dam is 45.6 m above the ellipsoid), so with Re:Earth Ellipsoid terrain the building sits on the ground. With AWS or Mapterhorn (heights above sea level) it floats about 45 m above the terrain.
+
+![Building on the Dam with Re:Earth Ellipsoid terrain in the Cesium renderer](docs/demo-dam.png)
+
 ## Renderer support
 
 | Renderer | Status |
