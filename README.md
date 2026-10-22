@@ -5,14 +5,13 @@ A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you choose t
 
 GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 
-<img width="953" height="484" alt="image" src="https://github.com/user-attachments/assets/a437ee16-a7ff-4697-b6cc-aed93af4fc7e" />
-
-<img width="1918" height="1032" alt="image" src="https://github.com/user-attachments/assets/5733b12a-500a-4159-85d2-37f6141a82d1" />
+![Terrain provider panel](docs/panel.png)
 
 ## How it works in GeoLibre
 
-1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**.
-2. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use AWS Terrarium (GeoLibre default)**, **Use Mapterhorn**, **Use Re:Earth Ellipsoid**) or the **Terrain provider…** panel.
+1. **First choose the rendering engine** in GeoLibre. The plugin only supports MapLibre, Mapbox and Cesium, and the functionality differs per engine: for example, 3D Tiles work better in Cesium.
+2. **Then enable 3D terrain** in GeoLibre: check **Controls → Terrain**.
+3. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use AWS Terrarium (GeoLibre default)**, **Use Mapterhorn**, **Use Re:Earth Ellipsoid**) or the **Terrain provider…** panel.
 
 Terrain exaggeration can be adjusted by double-clicking the GeoLibre terrain button.
 
