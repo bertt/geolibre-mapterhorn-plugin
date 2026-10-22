@@ -25,27 +25,28 @@
   border-radius: 4px;
 }
 
-.geolibre-mapterhorn-panel input:disabled,
-.geolibre-mapterhorn-panel select:disabled {
-  opacity: 0.6;
-}
-
-.geolibre-mapterhorn-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.geolibre-mapterhorn-panel button {
-  font: inherit;
-  padding: 4px 10px;
-  cursor: pointer;
-  color: hsl(var(--foreground));
-  background: hsl(var(--muted));
-  border: 1px solid hsl(var(--border));
-  border-radius: 4px;
-}
-
 .geolibre-mapterhorn-status {
   margin: 0;
   opacity: 0.8;
+}
+
+.geolibre-mapterhorn-panel label.active {
+  padding: 6px;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 4px;
+  background: hsl(var(--muted));
+}
+
+.geolibre-mapterhorn-badge {
+  display: none;
+  margin-left: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  border-radius: 8px;
+}
+
+.geolibre-mapterhorn-panel label.active .geolibre-mapterhorn-badge {
+  display: inline;
 }

@@ -1,56 +1,32 @@
 # GeoLibre Mapterhorn Terrain Plugin
 
-A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you switch 3D terrain between the built-in
-AWS Terrarium tiles and [Mapterhorn](https://mapterhorn.com/) terrain tiles, and back again.
+A [GeoLibre](https://github.com/opengeos/GeoLibre) plugin that lets you choose the 3D terrain source: **Re:Earth**,
+**AWS Terrarium** or [Mapterhorn](https://mapterhorn.com/). It works in all renderers (MapLibre, Mapbox and Cesium).
 
 GeoLibre Plugin: https://plugins.geolibre.app/catalog/geolibre-mapterhorn/
 
 <img width="953" height="484" alt="image" src="https://github.com/user-attachments/assets/a437ee16-a7ff-4697-b6cc-aed93af4fc7e" />
 
-By default GeoLibre uses Terrarium tiles from
-`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`. This plugin replaces the terrain
-DEM source with Mapterhorn's Terrarium-encoded WebP tiles (or a custom tile source) and restores the default when
-you switch back or disable the plugin.
-
 <img width="1918" height="1032" alt="image" src="https://github.com/user-attachments/assets/5733b12a-500a-4159-85d2-37f6141a82d1" />
 
 ## How it works in GeoLibre
 
-Using the plugin is a two-stage rocket:
-
-1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**. This shows the terrain with the default AWS Terrarium tiles.
-2. **Then switch the source in the plugin** from AWS Terrarium to Mapterhorn (via the **Terrain** toolbar menu: **Use Mapterhorn**).
+1. **First enable 3D terrain** in GeoLibre: check **Controls → Terrain**.
+2. **Then pick the terrain source** in the plugin, via the **Terrain** toolbar menu (**Use Re:Earth**, **Use AWS Terrarium**, **Use Mapterhorn**) or the **Terrain provider…** panel.
 
 Terrain exaggeration can be adjusted by double-clicking the GeoLibre terrain button.
-## Features
 
-- Switch between **Mapterhorn**, **AWS Terrarium (GeoLibre default)** and a **Custom** DEM source.
-- Configurable URL template, credit (attribution), encoding (Terrarium or Mapbox Terrain-RGB), tile size and max zoom for custom sources.
-- Keeps the terrain on/off state and exaggeration when switching; re-applies after a basemap/style reload.
-- Settings are saved in the GeoLibre project file.
+## Providers
 
-## Settings
+All three use Terrarium encoding. The URL of each provider is editable in the panel (`{z}`, `{x}`, `{y}` placeholders); the selected provider and URLs are saved in the GeoLibre project file.
 
-| Setting | Default (Mapterhorn) | Description |
-| --- | --- | --- |
-| URL | `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` | Tile URL template with `{z}`, `{x}`, `{y}`. |
-| Credit | `Mapterhorn` | Attribution shown on the map. |
-| Encoding | `terrarium` | DEM encoding (`terrarium` or `mapbox`). |
-| Tile size | `512` | Tile size in pixels. |
-| Max zoom | `17` | Highest zoom level served. |
+| Provider | Default URL | Tile size | Max zoom |
+| --- | --- | --- | --- |
+| Re:Earth | `https://terrain.reearth.land/terrarium/ellipsoid/{z}/{x}/{y}.png` | 256 | 15 |
+| AWS Terrarium | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | 256 | 15 |
+| Mapterhorn (default) | `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` | 512 | 17 |
 
-All values except the provider are editable when **Custom** is selected.
-
-### Cesium settings
-
-On the Cesium renderer the plugin uses a separate, always-editable terrain source:
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| Cesium terrain URL | `https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png` | Terrarium tile URL template with `{z}`, `{x}`, `{y}`. |
-| Cesium max zoom | `15` | Highest zoom level served; deeper levels are upsampled. |
-
-Note: the Re:Earth terrain tiles contain **ellipsoidal heights** (height above the WGS84 ellipsoid), which is what Cesium expects, not heights above the geoid/sea level.
+Note: the Re:Earth default URL serves **ellipsoidal heights** (WGS84, `/terrarium/ellipsoid/`), which is what Cesium expects, so ellipsoidal 3D tilesets (e.g. 3D BAG) sit on the terrain. AWS and Mapterhorn serve heights above sea level (geoid); tilesets in ellipsoidal heights float above them by the geoid undulation (about 45 m in the Netherlands). Re:Earth also offers sea-level tiles at `/terrarium/elevation/`.
 
 ## Renderer support
 
@@ -58,11 +34,10 @@ Note: the Re:Earth terrain tiles contain **ellipsoidal heights** (height above t
 | --- | --- |
 | MapLibre | Supported |
 | Mapbox | Supported |
-| Cesium | Supported (Terrarium heightmap provider, URL configurable, see above) |
+| Cesium | Supported (Terrarium heightmap provider) |
 | ArcGIS | Not supported |
 
-On unsupported renderers GeoLibre suspends the plugin.
-
+On unsupported renderers GeoLibre suspends the plugin. Disabling the plugin restores the AWS default on MapLibre/Mapbox.
 ## Install
 
 Requires GeoLibre 0.9.0 or newer.
@@ -74,11 +49,6 @@ Requires GeoLibre 0.9.0 or newer.
   **Manage Plugins → Settings → Install from file**.
 - **For development:** build the plugin (below) and add the `dist/geolibre-mapterhorn` folder under
   **Settings → Plugins** as a development directory.
-
-## Usage
-
-Use the **Terrain** toolbar menu: **Use Mapterhorn**, **Use AWS Terrarium (default)**, or
-**Terrain provider…** to open the settings panel. Enable 3D terrain in GeoLibre (Controls → Terrain) first to see the result.
 
 ## Build
 

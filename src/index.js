@@ -3,40 +3,35 @@ const TERRAIN_SOURCE_ID = "geolibre-terrain-dem"; // source id GeoLibre uses for
 const PANEL_ID = `${PLUGIN_ID}-panel`;
 const MENU_ID = `${PLUGIN_ID}-menu`;
 
-const MAPTERHORN_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
-const CESIUM_URL = "https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png";
-const CESIUM_MAX_ZOOM = 15;
-const AWS_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-
-const PRESETS = {
-  mapterhorn: {
-    label: "Mapterhorn",
-    url: MAPTERHORN_URL,
-    credit: "Mapterhorn",
-    encoding: "terrarium",
-    tileSize: 512,
-    maxZoom: 17,
-  },
-  aws: {
-    label: "AWS Terrarium (GeoLibre default)",
-    url: AWS_URL,
-    credit: "AWS Open Data Terrain Tiles",
-    encoding: "terrarium",
+const PROVIDERS = {
+  rearth: {
+    label: "Re:Earth",
+    url: "https://terrain.reearth.land/terrarium/ellipsoid/{z}/{x}/{y}.png",
+    credit: "Re:Earth terrain",
     tileSize: 256,
     maxZoom: 15,
   },
-  custom: {
-    label: "Custom",
-    url: MAPTERHORN_URL,
-    credit: "Custom terrain",
-    encoding: "terrarium",
+  aws: {
+    label: "AWS Terrarium",
+    url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    credit: "AWS Open Data Terrain Tiles",
+    tileSize: 256,
+    maxZoom: 15,
+  },
+  mapterhorn: {
+    label: "Mapterhorn",
+    url: "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
+    credit: "Mapterhorn",
     tileSize: 512,
     maxZoom: 17,
   },
 };
 
-let settings = { preset: "mapterhorn", ...PRESETS.mapterhorn, cesiumUrl: CESIUM_URL, cesiumMaxZoom: CESIUM_MAX_ZOOM };
-let appApi = null;
+const defaultUrls = () =>
+  Object.fromEntries(Object.entries(PROVIDERS).map(([key, p]) => [key, p.url]));
+
+let settings = { provider: "mapterhorn", urls: defaultUrls() };
+const current = () => ({ ...PROVIDERS[settings.provider], url: settings.urls[settings.provider] });let appApi = null;
 let disposers = [];
 let mapListener = null;
 let mapRef = null;
@@ -51,77 +46,50 @@ function setStatus(message) {
 }
 
 function sanitize(input) {
-  const preset = PRESETS[input?.preset] ? input.preset : "mapterhorn";
-  const base = PRESETS[preset];
-  const cesiumMaxZoom = Number(input?.cesiumMaxZoom);
-  const cesium = {
-    cesiumUrl:
-      typeof input?.cesiumUrl === "string" && input.cesiumUrl.trim()
-        ? input.cesiumUrl.trim()
-        : CESIUM_URL,
-    cesiumMaxZoom: cesiumMaxZoom > 0 ? cesiumMaxZoom : CESIUM_MAX_ZOOM,
-  };
-  if (preset !== "custom") return { preset, ...base, ...cesium };
-  const tileSize = Number(input.tileSize);
-  const maxZoom = Number(input.maxZoom);
-  return {
-    preset,
-    url: typeof input.url === "string" && input.url.trim() ? input.url.trim() : base.url,
-    credit: typeof input.credit === "string" ? input.credit : base.credit,
-    encoding: input.encoding === "mapbox" ? "mapbox" : "terrarium",
-    tileSize: tileSize > 0 ? tileSize : base.tileSize,
-    maxZoom: maxZoom > 0 ? maxZoom : base.maxZoom,
-    label: base.label,
-    ...cesium,
-  };
+  const urls = defaultUrls();
+  for (const key of Object.keys(urls)) {
+    const value = input?.urls?.[key];
+    if (typeof value === "string" && value.trim()) urls[key] = value.trim();
+  }
+  return { provider: PROVIDERS[input?.provider] ? input.provider : "mapterhorn", urls };
 }
 
 // --- MapLibre -------------------------------------------------------------
 
 function applyMapLibre(map) {
   if (!map.isStyleLoaded?.() && !map.getStyle?.()) return false;
+  const { url, tileSize, maxZoom, credit } = current();
   const terrain = map.getTerrain?.();
-  const wasEnabled = Boolean(terrain);
   const exaggeration = terrain?.exaggeration ?? 1;
   const existing = map.getSource(TERRAIN_SOURCE_ID);
-  if (existing?.tiles?.[0] === settings.url && existing.encoding === settings.encoding) {
-    return true;
-  }
-  if (wasEnabled) map.setTerrain(null);
+  if (existing?.tiles?.[0] === url) return true;
+  if (terrain) map.setTerrain(null);
   if (existing) map.removeSource(TERRAIN_SOURCE_ID);
   map.addSource(TERRAIN_SOURCE_ID, {
     type: "raster-dem",
-    tiles: [settings.url],
-    tileSize: settings.tileSize,
-    maxzoom: settings.maxZoom,
-    encoding: settings.encoding,
-    attribution: escapeHtml(settings.credit),
+    tiles: [url],
+    tileSize,
+    maxzoom: maxZoom,
+    encoding: "terrarium",
+    attribution: escapeHtml(credit),
   });
-  if (wasEnabled) map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration });
+  if (terrain) map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration });
   return true;
 }
 
 function restoreMapLibre(map) {
-  const defaults = PRESETS.aws;
   const saved = settings;
-  settings = { preset: "aws", ...defaults };
+  settings = { provider: "aws", urls: defaultUrls() };
   try {
     applyMapLibre(map);
   } finally {
     settings = saved;
   }
 }
-
 // --- Cesium ---------------------------------------------------------------
 
 const CESIUM_GRID = 65;
 let cesiumState = null; // { viewer, original, provider, listener, remove }
-
-function decodeHeight(encoding, r, g, b) {
-  return encoding === "mapbox"
-    ? -10000 + (r * 65536 + g * 256 + b) * 0.1
-    : r * 256 + g + b / 256 - 32768;
-}
 
 function createCesiumProvider(Cesium, config) {
   const tilingScheme = new Cesium.WebMercatorTilingScheme();
@@ -178,12 +146,7 @@ function createCesiumProvider(Cesium, config) {
           for (let col = 0; col < CESIUM_GRID; col++) {
             const px = Math.round((col / (CESIUM_GRID - 1)) * (width - 1));
             const i = (py * width + px) * 4;
-            heights[row * CESIUM_GRID + col] = decodeHeight(
-              config.encoding,
-              pixels[i],
-              pixels[i + 1],
-              pixels[i + 2],
-            );
+            heights[row * CESIUM_GRID + col] = pixels[i] * 256 + pixels[i + 1] + pixels[i + 2] / 256 - 32768;
           }
         }
         return new Cesium.HeightmapTerrainData({
@@ -212,16 +175,7 @@ function releaseCesium(restore) {
 
 function applyCesium(handle) {
   const { Cesium, viewer, scene } = handle;
-  if (settings.preset === "aws") {
-    releaseCesium(true);
-    return;
-  }
-  const config = {
-    url: settings.cesiumUrl,
-    maxZoom: settings.cesiumMaxZoom,
-    encoding: settings.encoding,
-    credit: settings.credit,
-  };
+  const config = current();
   const key = JSON.stringify(config);
   if (cesiumState?.viewer === viewer && cesiumState.key === key) return;
   const original = cesiumState?.viewer === viewer ? cesiumState.original : viewer.terrainProvider;
@@ -275,7 +229,7 @@ function apply() {
         retryTimer = setTimeout(apply, 500);
         return;
       }
-      setStatus(`${renderer === "mapbox" ? "Mapbox" : "MapLibre"}: ${settings.label} terrain.`);
+      setStatus(`${renderer === "mapbox" ? "Mapbox" : "MapLibre"}: ${current().label} terrain.`);
     } else if (renderer === "cesium") {
       detachMapListener();
       const handle = appApi.getCesiumScene?.();
@@ -284,11 +238,7 @@ function apply() {
         return;
       }
       applyCesium(handle);
-      setStatus(
-        settings.preset === "aws"
-          ? "Cesium: GeoLibre default terrain."
-          : `Cesium: terrain from ${settings.cesiumUrl}`,
-      );
+      setStatus(`Cesium: ${current().label} terrain.`);
     } else {
       setStatus(`The ${renderer} renderer is not supported.`);
     }
@@ -300,108 +250,59 @@ function apply() {
 
 // --- UI -------------------------------------------------------------------
 
-function field(labelText, control) {
-  const label = document.createElement("label");
-  label.append(labelText, control);
-  return label;
-}
-
 function renderPanel(container) {
   const wrap = document.createElement("div");
   wrap.className = "geolibre-mapterhorn-panel";
 
-  const preset = document.createElement("select");
-  for (const [key, value] of Object.entries(PRESETS)) {
-    preset.add(new Option(value.label, key));
-  }
-  const url = document.createElement("input");
-  url.type = "text";
-  const credit = document.createElement("input");
-  credit.type = "text";
-  const encoding = document.createElement("select");
-  encoding.add(new Option("Terrarium", "terrarium"));
-  encoding.add(new Option("Mapbox Terrain-RGB", "mapbox"));
-  const tileSize = document.createElement("input");
-  tileSize.type = "number";
-  tileSize.min = "1";
-  const maxZoom = document.createElement("input");
-  maxZoom.type = "number";
-  maxZoom.min = "1";
-  maxZoom.max = "24";
+  const radios = {};
+  const inputs = {};
+  const rowEls = {};
+  const rows = Object.entries(PROVIDERS).map(([key, p]) => {
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = `${PLUGIN_ID}-provider`;
+    radio.value = key;
+    const input = document.createElement("input");
+    input.type = "text";
+    radios[key] = radio;
+    inputs[key] = input;
+    const label = document.createElement("label");
+    const title = document.createElement("span");
+    const badge = document.createElement("span");
+    badge.className = "geolibre-mapterhorn-badge";
+    badge.textContent = "Active";
+    title.append(radio, ` ${p.label} `, badge);
+    label.append(title, input);
+    rowEls[key] = label;
+    return label;
+  });
 
-  const cesiumUrl = document.createElement("input");
-  cesiumUrl.type = "text";
-  const cesiumMaxZoom = document.createElement("input");
-  cesiumMaxZoom.type = "number";
-  cesiumMaxZoom.min = "1";
-  cesiumMaxZoom.max = "24";
-
-  const fields = [url, credit, encoding, tileSize, maxZoom];
   const sync = () => {
-    preset.value = settings.preset;
-    url.value = settings.url;
-    credit.value = settings.credit;
-    encoding.value = settings.encoding;
-    tileSize.value = String(settings.tileSize);
-    maxZoom.value = String(settings.maxZoom);
-    cesiumUrl.value = settings.cesiumUrl;
-    cesiumMaxZoom.value = String(settings.cesiumMaxZoom);
-    for (const el of fields) el.disabled = settings.preset !== "custom";
+    for (const key of Object.keys(PROVIDERS)) {
+      radios[key].checked = key === settings.provider;
+      rowEls[key].classList.toggle("active", key === settings.provider);
+      inputs[key].value = settings.urls[key];
+    }
   };
   sync();
 
-  preset.addEventListener("change", () => {
-    settings = sanitize({ ...settings, preset: preset.value });
-    sync();
-    apply();
-  });
-
-  const applyButton = document.createElement("button");
-  applyButton.type = "button";
-  applyButton.textContent = "Apply";
-  applyButton.addEventListener("click", () => {
+  const update = () => {
     settings = sanitize({
-      preset: preset.value,
-      url: url.value,
-      credit: credit.value,
-      encoding: encoding.value,
-      tileSize: tileSize.value,
-      maxZoom: maxZoom.value,
-      cesiumUrl: cesiumUrl.value,
-      cesiumMaxZoom: cesiumMaxZoom.value,
+      provider: Object.keys(radios).find((key) => radios[key].checked),
+      urls: Object.fromEntries(Object.keys(inputs).map((key) => [key, inputs[key].value])),
     });
     sync();
     apply();
-  });
-
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.textContent = "Back to default (AWS)";
-  resetButton.addEventListener("click", () => {
-    settings = sanitize({ ...settings, preset: "aws" });
-    sync();
-    apply();
-  });
-
-  const actions = document.createElement("div");
-  actions.className = "geolibre-mapterhorn-actions";
-  actions.append(applyButton, resetButton);
+  };
+  for (const key of Object.keys(PROVIDERS)) {
+    radios[key].addEventListener("change", update);
+    inputs[key].addEventListener("change", update);
+  }
 
   statusEl = document.createElement("p");
   statusEl.className = "geolibre-mapterhorn-status";
 
-  wrap.append(
-    field("Terrain provider", preset),
-    field("URL template ({z}/{x}/{y})", url),
-    field("Credit", credit),
-    field("Encoding", encoding),
-    field("Tile size (px)", tileSize),
-    field("Max zoom", maxZoom),
-    field("Cesium terrain URL ({z}/{x}/{y})", cesiumUrl),
-    field("Cesium max zoom", cesiumMaxZoom),
-    actions,
-    statusEl,
-  );
+  wrap.append(...rows, statusEl);
   container.appendChild(wrap);
   return () => {
     wrap.remove();
@@ -417,7 +318,7 @@ function registerUi(app) {
     app.registerFloatingPanel?.({
       id: PANEL_ID,
       title: "Terrain provider",
-      defaultWidth: 320,
+      defaultWidth: 360,
       render: renderPanel,
     }),
   );
@@ -432,27 +333,18 @@ function registerUi(app) {
           disabled: !app.openFloatingPanel,
           onSelect: () => app.openFloatingPanel?.(PANEL_ID),
         },
-        {
-          id: "mapterhorn",
-          label: "Use Mapterhorn",
+        ...Object.entries(PROVIDERS).map(([key, p]) => ({
+          id: key,
+          label: `Use ${p.label}`,
           onSelect: () => {
-            settings = sanitize({ ...settings, preset: "mapterhorn" });
+            settings = sanitize({ ...settings, provider: key });
             apply();
           },
-        },
-        {
-          id: "aws",
-          label: "Use AWS Terrarium (default)",
-          onSelect: () => {
-            settings = sanitize({ ...settings, preset: "aws" });
-            apply();
-          },
-        },
+        })),
       ],
     }),
   );
 }
-
 export const plugin = {
   id: PLUGIN_ID,
   name: "Mapterhorn Terrain",
